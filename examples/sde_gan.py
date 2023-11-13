@@ -12,12 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Train an SDE as a GAN, on data from a time-dependent Ornstein--Uhlenbeck process.
+"""#*Train an SDE as a GAN, on data from a time-dependent Ornstein--Uhlenbeck process.
 
 Training SDEs as GANs was introduced in "Neural SDEs as Infinite-Dimensional GANs".
 https://arxiv.org/abs/2102.03657
 
-This reproduces the toy example in Section 4.1 of that paper.
+#*This reproduces the toy example in Section 4.1 of that paper.
 
 This additionally uses the improvements introduced in "Efficient and Accurate Gradients for Neural SDEs".
 https://arxiv.org/abs/2105.13493
@@ -29,21 +29,23 @@ pip install git+https://github.com/patrick-kidger/torchcde.git
 To run, execute:
 python -m examples.sde_gan
 """
+from pathlib import Path
 import fire
+import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 import torch
 import torch.optim.swa_utils as swa_utils
 import torchcde
 import torchsde
 import tqdm
+import os
+import argparse
 
-<<<<<<< Updated upstream
-=======
 import wandb
-os.environ['WANDB_MODE'] = 'offline'
+os.environ['WANDB_MODE'] = 'online'
 
 curr_dir = Path(__file__).parent
->>>>>>> Stashed changes
 
 ###################
 # First some standard helper objects.
@@ -69,7 +71,8 @@ class MLP(torch.nn.Module):
             model.append(LipSwish())
         model.append(torch.nn.Linear(mlp_size, out_size))
         if tanh:
-            model.append(torch.nn.Tanh())
+            #model.append(torch.nn.Tanh())
+            model.append(torch.nn.Sigmoid())
         self._model = torch.nn.Sequential(*model)
 
     def forward(self, x):
@@ -197,38 +200,27 @@ class Discriminator(torch.nn.Module):
 ###################
 # Generate some data. For this example we generate some synthetic data from a time-dependent Ornstein-Uhlenbeck SDE.
 ###################
-def get_data(batch_size, device):
-    dataset_size = 8192
+def _load_data(zone, H):
+    PATH = curr_dir / '..' / 'data' / f'wind_{zone}_train.csv'
+    data = pd.read_csv(PATH)
+    value_array = np.array(data.iloc[:,1], dtype='float32')
+    values = []
+    
+    for i in range(len(data)-H):
+        sub_array = value_array[i:i+H]
+        x = torch.from_numpy(np.expand_dims(sub_array,0))
+        values.append(x)
+    
+    return torch.stack(values).transpose(1,2)
+
+
+def get_data(zone, batch_size, plot_data=False):
     t_size = 64
 
-    class OrnsteinUhlenbeckSDE(torch.nn.Module):
-        sde_type = 'ito'
-        noise_type = 'scalar'
-
-        def __init__(self, mu, theta, sigma):
-            super().__init__()
-            self.register_buffer('mu', torch.as_tensor(mu))
-            self.register_buffer('theta', torch.as_tensor(theta))
-            self.register_buffer('sigma', torch.as_tensor(sigma))
-
-        def f(self, t, y):
-            return self.mu * t - self.theta * y
-
-        def g(self, t, y):
-            return self.sigma.expand(y.size(0), 1, 1) * (2 * t / t_size)
-
-    ou_sde = OrnsteinUhlenbeckSDE(mu=0.02, theta=0.1, sigma=0.4).to(device)
-    y0 = torch.rand(dataset_size, device=device).unsqueeze(-1) * 2 - 1
-    ts = torch.linspace(0, t_size - 1, t_size, device=device)
-    ys = torchsde.sdeint(ou_sde, y0, ts, dt=1e-1)
-
-    ###################
-    # To demonstrate how to handle irregular data, then here we additionally drop some of the data (by setting it to
-    # NaN.)
-    ###################
-    ys_num = ys.numel()
-    to_drop = torch.randperm(ys_num)[:int(0.3 * ys_num)]
-    ys.view(-1)[to_drop] = float('nan')
+    ts = torch.linspace(0, t_size - 1, t_size)      # [64]
+    ys = _load_data(zone=zone, H=t_size)            # [2651, 64, 1]
+    
+    dataset_size = ys.shape[0]
 
     ###################
     # Typically important to normalise data. Note that the data is normalised with respect to the statistics of the
@@ -236,7 +228,7 @@ def get_data(batch_size, device):
     # initial condition is wrong then it's pretty hard to learn the rest of the SDE correctly.
     ###################
     y0_flat = ys[0].view(-1)
-    y0_not_nan = y0_flat.masked_select(~torch.isnan(y0_flat))
+    y0_not_nan = y0_flat.masked_select(~torch.isnan(y0_flat)) #? unnecessary
     ys = (ys - y0_not_nan.mean()) / y0_not_nan.std()
     
     # todo: sistema senza ciclo
@@ -247,25 +239,53 @@ def get_data(batch_size, device):
     ###################
     # As discussed, time must be included as a channel for the discriminator.
     ###################
-    ys = torch.cat([ts.unsqueeze(0).unsqueeze(-1).expand(dataset_size, t_size, 1),
-                    ys.transpose(0, 1)], dim=2)
-    # shape (dataset_size=1000, t_size=100, 1 + data_size=3)
+    ys = torch.cat([ts.unsqueeze(0).unsqueeze(-1).expand(dataset_size, t_size, 1), ys], dim=2)  # [2651, 64, 2]
 
     ###################
-    # Package up.
+    # Package up
     ###################
     data_size = ys.size(-1) - 1  # How many channels the data has (not including time, hence the minus one).
     ys_coeffs = torchcde.linear_interpolation_coeffs(ys)  # as per neural CDEs.
     dataset = torch.utils.data.TensorDataset(ys_coeffs)
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True)
+    
+    if plot_data:
+        _plot(ts, dataloader, num_plot_samples=50, zone=zone)
 
     return ts, data_size, dataloader
+
+
+def _plot(ts, dataloader, num_plot_samples, zone):
+    if not os.path.isdir(f'./torchsde/images/{zone}'):
+        os.makedirs(f'./torchsde/images/{zone}')
+        
+    # Get samples
+    real_samples, = next(iter(dataloader))
+    assert num_plot_samples <= real_samples.size(0)
+    real_samples = torchcde.LinearInterpolation(real_samples).evaluate(ts)
+    real_samples = real_samples[..., 1]
+
+    real_samples = real_samples[:num_plot_samples]
+
+    # Plot samples
+    plt.figure()
+    for real_sample_ in real_samples:
+        kwargs = {'label': 'Real'}
+        plt.plot(ts.cpu(), real_sample_.cpu(), color='dodgerblue', linewidth=0.5, alpha=0.7, **kwargs)
+    
+    plt.title(f"{num_plot_samples} samples from both real distribution")
+    plt.tight_layout()
+    plt.savefig(f'./torchsde/images/{zone}/real_samples_{zone}.png', dpi=200, format='png')
+    #plt.show()
 
 
 ###################
 # We'll plot some results at the end.
 ###################
-def plot(ts, generator, dataloader, num_plot_samples, plot_locs):
+def plot(ts, generator, dataloader, num_plot_samples, plot_locs, zone):
+    if not os.path.isdir(f'./torchsde/images/{zone}'):
+        os.makedirs(f'./torchsde/images/{zone}')
+        
     # Get samples
     real_samples, = next(iter(dataloader))
     assert num_plot_samples <= real_samples.size(0)
@@ -282,11 +302,12 @@ def plot(ts, generator, dataloader, num_plot_samples, plot_locs):
         time = int(prop * (real_samples.size(1) - 1))
         real_samples_time = real_samples[:, time]
         generated_samples_time = generated_samples[:, time]
+        
+        plt.figure()
         _, bins, _ = plt.hist(real_samples_time.cpu().numpy(), bins=32, alpha=0.7, label='Real', color='dodgerblue',
                               density=True)
         bin_width = bins[1] - bins[0]
         num_bins = int((generated_samples_time.max() - generated_samples_time.min()).item() // bin_width)
-        plt.figure()
         plt.hist(generated_samples_time.cpu().numpy(), bins=num_bins, alpha=0.7, label='Generated', color='crimson',
                  density=True)
         plt.legend()
@@ -294,6 +315,7 @@ def plot(ts, generator, dataloader, num_plot_samples, plot_locs):
         plt.ylabel('Density')
         plt.title(f'Marginal distribution at time {time}.')
         plt.tight_layout()
+        plt.savefig(f'./torchsde/images/{zone}/marginal_distribution_{prop}_{zone}.png', dpi=200, format='png')
         #plt.show()
 
     real_samples = real_samples[:num_plot_samples]
@@ -314,6 +336,7 @@ def plot(ts, generator, dataloader, num_plot_samples, plot_locs):
     plt.legend()
     plt.title(f"{num_plot_samples} samples from both real and generated distributions.")
     plt.tight_layout()
+    plt.savefig(f'./torchsde/images/{zone}/samples_real_vs_generated_{zone}.png', dpi=200, format='png')
     plt.show()
 
 
@@ -331,66 +354,63 @@ def plot(ts, generator, dataloader, num_plot_samples, plot_locs):
 # - Scaling the weights at initialisation to be roughly the right size (chosen through empirical trial-and-error).
 ###################
 
-def evaluate_loss(ts, batch_size, dataloader, generator, discriminator):
+def evaluate_loss(ts, batch_size, dataloader, generator, discriminator, device):
     with torch.no_grad():
         total_samples = 0
         total_loss = 0
         for real_samples, in dataloader:
-            generated_samples = generator(ts, batch_size)
+            generated_samples = generator(ts, batch_size).to(device)
             generated_score = discriminator(generated_samples)
-            real_score = discriminator(real_samples)
+            real_score = discriminator(real_samples.to(device))
             loss = generated_score - real_score
             total_samples += batch_size
             total_loss += loss.item() * batch_size
     return total_loss / total_samples
 
 
-def main(
-<<<<<<< Updated upstream
-        # Architectural hyperparameters. These are quite small for illustrative purposes.
-        initial_noise_size=5,  # How many noise dimensions to sample at the start of the SDE.
-        noise_size=3,          # How many dimensions the Brownian motion has.
-        hidden_size=16,        # How big the hidden size of the generator SDE and the discriminator CDE are.
-        mlp_size=16,           # How big the layers in the various MLPs are.
-        num_layers=1,          # How many hidden layers to have in the various MLPs.
-=======
-    zone='mock',
-    
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    #
+    parser.add_argument('--zone', type=str, default='mock')
+    #
     # Architectural hyperparameters. These are quite small for illustrative purposes.
-    initial_noise_size=5,  # How many noise dimensions to sample at the start of the SDE.
-    noise_size=3,          # How many dimensions the Brownian motion has.
-    hidden_size=16,        # How big the hidden size of the generator SDE and the discriminator CDE are.
-    mlp_size=16,           # How big the layers in the various MLPs are.
-    num_layers=1,          # How many hidden layers to have in the various MLPs.
->>>>>>> Stashed changes
-
-        # Training hyperparameters. Be prepared to tune these very carefully, as with any GAN.
-        generator_lr=2e-4,      # Learning rate often needs careful tuning to the problem.
-        discriminator_lr=1e-3,  # Learning rate often needs careful tuning to the problem.
-        batch_size=1024,        # Batch size.
-        steps=10000,            # How many steps to train both generator and discriminator for.
-        init_mult1=3,           # Changing the initial parameter size can help.
-        init_mult2=0.5,         #
-        weight_decay=0.01,      # Weight decay.
-        swa_step_start=5000,    # When to start using stochastic weight averaging.
-
-        # Evaluation and plotting hyperparameters
-        steps_per_print=10,                   # How often to print the loss.
-        num_plot_samples=50,                  # How many samples to use on the plots at the end.
-        plot_locs=(0.1, 0.3, 0.5, 0.7, 0.9),  # Plot some marginal distributions at this proportion of the way along.
-):
+    parser.add_argument('--initial_noise_size', type=int, default=5)
+    parser.add_argument('--noise_size', type=int, default=3)
+    parser.add_argument('--hidden_size', type=int, default=16)
+    parser.add_argument('--mlp_size', type=int, default=16)
+    parser.add_argument('--num_layers', type=int, default=1)
+    #
+    # Training hyperparameters. Be prepared to tune these very carefully, as with any GAN.
+    parser.add_argument('--generator_lr', type=float, default=2e-4)
+    parser.add_argument('--discriminator_lr', type=float, default=1e-3)
+    parser.add_argument('--batch_size', type=int, default=1024)
+    parser.add_argument('--steps', type=int, default=10000)
+    parser.add_argument('--init_mult1', type=float, default=3)
+    parser.add_argument('--init_mult2', type=float, default=0.5)
+    parser.add_argument('--weight_decay', type=float, default=0.01)
+    parser.add_argument('--swa_step_start', type=int, default=5000)
+    #
+    # Evaluation and plotting hyperparameters
+    parser.add_argument('--steps_per_print', type=int, default=10)
+    parser.add_argument('--num_plot_samples', type=int, default=50)
+    parser.add_argument('--plot_locs', type=tuple, default=(0.1, 0.3, 0.5, 0.7, 0.9))
+    #
+    args = parser.parse_args()
+    
     is_cuda = torch.cuda.is_available()
-    device = 'cuda' if is_cuda else 'cpu'
+    device = 'cuda:0' if is_cuda else 'cpu'
     if not is_cuda:
         print("Warning: CUDA not available; falling back to CPU but this is likely to be very slow.")
-
+    
     # Data
-    ts, data_size, train_dataloader = get_data(batch_size=batch_size, device=device)
+    print(f'Retrieve data for zone {args.zone}')
+    ts, data_size, train_dataloader = get_data(zone=args.zone, batch_size=args.batch_size, plot_data=True)
+    ts = ts.to(device)
     infinite_train_dataloader = (elem for it in iter(lambda: train_dataloader, None) for elem in it)
 
     # Models
-    generator = Generator(data_size, initial_noise_size, noise_size, hidden_size, mlp_size, num_layers).to(device)
-    discriminator = Discriminator(data_size, hidden_size, mlp_size, num_layers).to(device)
+    generator = Generator(data_size, args.initial_noise_size, args.noise_size, args.hidden_size, args.mlp_size, args.num_layers).to(device)
+    discriminator = Discriminator(data_size, args.hidden_size, args.mlp_size, args.num_layers).to(device)
     # Weight averaging really helps with GAN training.
     averaged_generator = swa_utils.AveragedModel(generator)
     averaged_discriminator = swa_utils.AveragedModel(discriminator)
@@ -403,24 +423,36 @@ def main(
     # (e.g. pretraining the t=0 distribution)
     with torch.no_grad():
         for param in generator._initial.parameters():
-            param *= init_mult1
+            param *= args.init_mult1
         for param in generator._func.parameters():
-            param *= init_mult2
+            param *= args.init_mult2
 
     # Optimisers. Adadelta turns out to be a much better choice than SGD or Adam, interestingly.
-    generator_optimiser = torch.optim.Adadelta(generator.parameters(), lr=generator_lr, weight_decay=weight_decay)
-    discriminator_optimiser = torch.optim.Adadelta(discriminator.parameters(), lr=discriminator_lr,
-                                                   weight_decay=weight_decay)
+    generator_optimiser = torch.optim.Adadelta(generator.parameters(), lr=args.generator_lr, weight_decay=args.weight_decay)
+    discriminator_optimiser = torch.optim.Adadelta(discriminator.parameters(), lr=args.discriminator_lr,
+                                                   weight_decay=args.weight_decay)
 
     # Train both generator and discriminator.
-    trange = tqdm.tqdm(range(steps))
+    trange = tqdm.tqdm(range(args.steps))
+    wandb.init(project='wind_gan')
     for step in trange:
         real_samples, = next(infinite_train_dataloader)
+        real_samples = real_samples.to(device)
 
-        generated_samples = generator(ts, batch_size)
+        generated_samples = generator(ts, args.batch_size)
+        generated_samples = generated_samples.to(device)
+        
         generated_score = discriminator(generated_samples)
+        generated_score = generated_score.to(device)
+        
         real_score = discriminator(real_samples)
-        loss = generated_score - real_score
+        real_score = real_score.to(device)
+        
+        loss = generated_score - real_score # todo: capire il senso di questa loss
+        loss = loss.to(device)
+        
+        wandb.log({'train loss': loss})
+        
         loss.backward()
 
         for param in generator.parameters():
@@ -441,15 +473,15 @@ def main(
                     module.weight.clamp_(-lim, lim)
 
         # Stochastic weight averaging typically improves performance.
-        if step > swa_step_start:
+        if step > args.swa_step_start:
             averaged_generator.update_parameters(generator)
             averaged_discriminator.update_parameters(discriminator)
 
-        if (step % steps_per_print) == 0 or step == steps - 1:
-            total_unaveraged_loss = evaluate_loss(ts, batch_size, train_dataloader, generator, discriminator)
-            if step > swa_step_start:
-                total_averaged_loss = evaluate_loss(ts, batch_size, train_dataloader, averaged_generator.module,
-                                                    averaged_discriminator.module)
+        if (step % args.steps_per_print) == 0 or step == args.steps - 1:
+            total_unaveraged_loss = evaluate_loss(ts, args.batch_size, train_dataloader, generator, discriminator, device=device)
+            if step > args.swa_step_start:
+                total_averaged_loss = evaluate_loss(ts, args.batch_size, train_dataloader, averaged_generator.module,
+                                                    averaged_discriminator.module, device=device)
                 trange.write(f"Step: {step:3} Loss (unaveraged): {total_unaveraged_loss:.4f} "
                              f"Loss (averaged): {total_averaged_loss:.4f}")
             else:
@@ -457,13 +489,16 @@ def main(
     generator.load_state_dict(averaged_generator.module.state_dict())
     discriminator.load_state_dict(averaged_discriminator.module.state_dict())
 
-    _, _, test_dataloader = get_data(batch_size=batch_size, device=device)
+    _, _, test_dataloader = get_data(zone=args.zone, batch_size=args.batch_size)
+    
+    print('Saving model...')
+    if not os.path.isdir('./torchsde/trained_model'):
+        os.makedirs('./torchsde/trained_model')
+    torch.save(generator.state_dict(), f'./torchsde/trained_model/generator_{args.zone}')
+    torch.save(discriminator.state_dict(), f'./torchsde/trained_model/discriminator_{args.zone}')
 
-    plot(ts, generator, test_dataloader, num_plot_samples, plot_locs)
+    plot(ts, generator, test_dataloader, args.num_plot_samples, args.plot_locs, args.zone)
 
-
-if __name__ == '__main__':
-    fire.Fire(main)
 
 ###################
 # And that's (one way of doing) an SDE as a GAN. Have fun.

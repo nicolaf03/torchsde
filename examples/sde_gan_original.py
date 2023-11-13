@@ -312,7 +312,7 @@ def _plot(ts, generator, dataloader, num_plot_samples, plot_locs):
         plt.ylabel('Density')
         plt.title(f'Marginal distribution at time {time}.')
         plt.tight_layout()
-        plt.savefig(f'./images/original/marginal_distribution_{prop}.png', dpi=200, format='png')
+        #plt.savefig(f'./images/original/marginal_distribution_{prop}.png', dpi=200, format='png')
         #plt.show()
 
     real_samples = real_samples[:num_plot_samples]
@@ -333,8 +333,8 @@ def _plot(ts, generator, dataloader, num_plot_samples, plot_locs):
     plt.legend()
     plt.title(f"{num_plot_samples} samples from both real and generated distributions.")
     plt.tight_layout()
-    plt.savefig('./images/original/samples_real_vs_generated.png', dpi=200, format='png')
-    #plt.show()
+    #plt.savefig('./images/original/samples_real_vs_generated.png', dpi=200, format='png')
+    plt.show()
     
 
 ###################
@@ -388,11 +388,13 @@ def main(
         num_plot_samples=50,                  # How many samples to use on the plots at the end.
         plot_locs=(0.1, 0.3, 0.5, 0.7, 0.9),  # Plot some marginal distributions at this proportion of the way along.
 ):
-    is_cuda = torch.cuda.is_available()
-    device = 'cuda' if is_cuda else 'cpu'
-    if not is_cuda:
-        print("Warning: CUDA not available; falling back to CPU but this is likely to be very slow.")
-
+    # is_cuda = torch.cuda.is_available()
+    # device = 'cuda' if is_cuda else 'cpu'
+    # if not is_cuda:
+    #     print("Warning: CUDA not available; falling back to CPU but this is likely to be very slow.")
+    device = "mps" if torch.backends.mps.is_available() else "cpu"
+    print(f"Using device: {device}")
+    
     # Data
     ts, data_size, train_dataloader = get_data(batch_size=batch_size, device=device)
     infinite_train_dataloader = (elem for it in iter(lambda: train_dataloader, None) for elem in it)

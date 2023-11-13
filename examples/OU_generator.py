@@ -105,10 +105,10 @@ if __name__ == '__main__':
     parser.add_argument('--num_plot_samples', type=int, default=50)
     args = parser.parse_args()
     
-    is_cuda = torch.cuda.is_available()
-    device = 'cuda' if is_cuda else 'cpu'
-    if not is_cuda:
-        print("Warning: CUDA not available; falling back to CPU but this is likely to be very slow.")
+    # Set the device 
+    device = "cpu"
+    #device = "mps" if torch.backends.mps.is_available() else "cpu"
+    print(f"Using device: {device}")
         
     #manual_seed(args.seed)
     

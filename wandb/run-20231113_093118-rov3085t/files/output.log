@@ -1,0 +1,46 @@
+
+Step:   0 Loss (unaveraged): 4.2120
+Step:  10 Loss (unaveraged): 4.1689
+Step:  20 Loss (unaveraged): 4.1230
+Traceback (most recent call last):
+  File "/Users/nicolafraccarolo/Documents/GitHub/torchsde/examples/sde_gan.py", line 456, in <module>
+    loss.backward()
+  File "/Users/nicolafraccarolo/miniforge3/envs/ml-env/lib/python3.8/site-packages/torch/_tensor.py", line 492, in backward
+    torch.autograd.backward(
+  File "/Users/nicolafraccarolo/miniforge3/envs/ml-env/lib/python3.8/site-packages/torch/autograd/__init__.py", line 251, in backward
+    Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass
+  File "/Users/nicolafraccarolo/miniforge3/envs/ml-env/lib/python3.8/site-packages/torch/autograd/function.py", line 288, in apply
+    return user_fn(self, *args)
+  File "/Users/nicolafraccarolo/miniforge3/envs/ml-env/lib/python3.8/site-packages/torchsde/_core/adjoint.py", line 98, in backward
+    (_, aug_state), *extra_solver_state = _SdeintAdjointMethod.apply(adjoint_sde,
+  File "/Users/nicolafraccarolo/miniforge3/envs/ml-env/lib/python3.8/site-packages/torch/autograd/function.py", line 539, in apply
+    return super().apply(*args, **kwargs)  # type: ignore[misc]
+  File "/Users/nicolafraccarolo/miniforge3/envs/ml-env/lib/python3.8/site-packages/torchsde/_core/adjoint.py", line 52, in forward
+    ys, extra_solver_state = solver.integrate(y0, ts, extra_solver_state)
+  File "/Users/nicolafraccarolo/miniforge3/envs/ml-env/lib/python3.8/site-packages/torchsde/_core/base_solver.py", line 145, in integrate
+    curr_y, curr_extra = self.step(curr_t, next_t, curr_y, curr_extra)
+  File "/Users/nicolafraccarolo/miniforge3/envs/ml-env/lib/python3.8/site-packages/torchsde/_core/methods/reversible_heun.py", line 133, in step
+    forward_f1, forward_g1 = self.forward_sde.f_and_g(-t1, forward_z1)
+  File "/Users/nicolafraccarolo/Documents/GitHub/torchsde/examples/sde_gan.py", line 111, in f_and_g
+    return self._drift(tx), self._diffusion(tx).view(x.size(0), self._hidden_size, self._noise_size)
+  File "/Users/nicolafraccarolo/miniforge3/envs/ml-env/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1518, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/Users/nicolafraccarolo/miniforge3/envs/ml-env/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1527, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/Users/nicolafraccarolo/Documents/GitHub/torchsde/examples/sde_gan.py", line 79, in forward
+    return self._model(x)
+  File "/Users/nicolafraccarolo/miniforge3/envs/ml-env/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1518, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/Users/nicolafraccarolo/miniforge3/envs/ml-env/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1527, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/Users/nicolafraccarolo/miniforge3/envs/ml-env/lib/python3.8/site-packages/torch/nn/modules/container.py", line 215, in forward
+    input = module(input)
+  File "/Users/nicolafraccarolo/miniforge3/envs/ml-env/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1518, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/Users/nicolafraccarolo/miniforge3/envs/ml-env/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1527, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/Users/nicolafraccarolo/Documents/GitHub/torchsde/examples/sde_gan.py", line 56, in forward
+    return 0.909 * torch.nn.functional.silu(x)
+  File "/Users/nicolafraccarolo/miniforge3/envs/ml-env/lib/python3.8/site-packages/torch/nn/functional.py", line 2072, in silu
+    return torch._C._nn.silu(input)
+KeyboardInterrupt

@@ -1,0 +1,37 @@
+{
+    "os": "macOS-14.1-arm64-arm-64bit",
+    "python": "3.8.18",
+    "heartbeatAt": "2023-11-13T08:31:19.291625",
+    "startedAt": "2023-11-13T08:31:18.336661",
+    "docker": null,
+    "cuda": null,
+    "args": [],
+    "state": "running",
+    "program": "/Users/nicolafraccarolo/Documents/GitHub/torchsde/examples/sde_gan.py",
+    "codePathLocal": "examples/sde_gan.py",
+    "codePath": "examples/sde_gan.py",
+    "git": {
+        "remote": "https://github.com/nicolaf03/torchsde.git",
+        "commit": "955900a06b870aa628aee388a1ec99905e0ceaed"
+    },
+    "email": "nicola.fraccarolo@gmail.com",
+    "root": "/Users/nicolafraccarolo/Documents/GitHub/torchsde",
+    "host": "MacBookAir-di-Nicola",
+    "username": "nicolafraccarolo",
+    "executable": "/Users/nicolafraccarolo/miniforge3/envs/ml-env/bin/python",
+    "cpu_count": 8,
+    "cpu_count_logical": 8,
+    "disk": {
+        "/": {
+            "total": 228.27386474609375,
+            "used": 81.94880294799805
+        }
+    },
+    "gpuapple": {
+        "type": "arm",
+        "vendor": "Apple"
+    },
+    "memory": {
+        "total": 8.0
+    }
+}

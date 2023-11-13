@@ -43,7 +43,7 @@ import os
 import argparse
 
 import wandb
-os.environ['WANDB_MODE'] = 'online'
+os.environ['WANDB_MODE'] = 'offline'
 
 curr_dir = Path(__file__).parent
 
@@ -407,7 +407,7 @@ if __name__ == '__main__':
     ts, data_size, train_dataloader = get_data(zone=args.zone, batch_size=args.batch_size, plot_data=True)
     ts = ts.to(device)
     infinite_train_dataloader = (elem for it in iter(lambda: train_dataloader, None) for elem in it)
-    exit(0)
+
     # Models
     generator = Generator(data_size, args.initial_noise_size, args.noise_size, args.hidden_size, args.mlp_size, args.num_layers).to(device)
     discriminator = Discriminator(data_size, args.hidden_size, args.mlp_size, args.num_layers).to(device)

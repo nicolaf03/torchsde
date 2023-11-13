@@ -156,3 +156,11 @@ wandb/run-20230824_175119-ar3gcqwb/files/wandb-metadata.json
 wandb/run-20230824_175119-ar3gcqwb/files/wandb-summary.json
 wandb/run-20230824_175119-ar3gcqwb/logs/debug-internal.log
 wandb/run-20230824_175119-ar3gcqwb/logs/debug.log
+wandb/latest-run
+wandb/offline-run-20231113_153845-pkjgarzt/run-pkjgarzt.wandb
+wandb/offline-run-20231113_153845-pkjgarzt/files/conda-environment.yaml
+wandb/offline-run-20231113_153845-pkjgarzt/files/requirements.txt
+wandb/offline-run-20231113_153845-pkjgarzt/files/wandb-metadata.json
+wandb/offline-run-20231113_153845-pkjgarzt/files/wandb-summary.json
+wandb/offline-run-20231113_153845-pkjgarzt/logs/debug-internal.log
+wandb/offline-run-20231113_153845-pkjgarzt/logs/debug.log
